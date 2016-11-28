@@ -20,7 +20,7 @@ GPU    = gpu_unai
 SPU    = spu_pcsxrearmed
 
 RM     = rm -f
-MD     = mkdir
+MD     = mkdir -p
 CC     = gcc
 CXX    = g++
 LD     = g++

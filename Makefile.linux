@@ -18,6 +18,7 @@ USE_GPULIB ?= 1
 GPU    = gpu_unai
 
 SPU    = spu_pcsxrearmed
+RECOMPILER = lightrec
 
 RM     = rm -f
 MD     = mkdir -p
@@ -54,6 +55,11 @@ OBJDIRS = \
 	obj/port obj/port/$(PORT) \
 	obj/plugin_lib
 
+ifdef RECOMPILER
+CFLAGS += -DPSXREC -D$(RECOMPILER)
+OBJDIRS += obj/recompiler/$(RECOMPILER)
+endif
+
 all: maketree $(TARGET)
 
 OBJS = \
@@ -65,6 +71,11 @@ OBJS = \
 	obj/mdec.o obj/decode_xa.o \
 	obj/cdriso.o obj/cdrom.o obj/ppf.o \
 	obj/sio.o obj/pad.o
+
+ifeq ($(RECOMPILER),lightrec)
+	LDFLAGS += -llightrec -lrt
+	OBJS += obj/recompiler/lightrec/lightrec.o obj/recompiler/lightrec/mem.o
+endif
 
 ######################################################################
 #  GPULIB from PCSX Rearmed:

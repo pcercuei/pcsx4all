@@ -59,8 +59,6 @@ int psxInit() {
 
 void psxReset() {
 
-	psxCpu->Reset();
-
 	psxMemReset();
 
 	memset(&psxRegs, 0, sizeof(psxRegs));
@@ -80,6 +78,8 @@ void psxReset() {
 	psxEvqueueInit();  // Event scheduler queue
 	psxHwReset();
 	psxBiosInit();
+
+	psxCpu->Reset();
 
 	if (!Config.HLE)
 		psxExecuteBios();

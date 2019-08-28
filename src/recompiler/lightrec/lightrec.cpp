@@ -390,8 +390,6 @@ static int lightrec_plugin_init(void)
 	return 0;
 }
 
-//extern void intExecuteBlock(void);
-
 static u32 hash_calculate(const void *buffer, u32 count)
 {
 	unsigned int i;
@@ -444,41 +442,41 @@ static void print_for_big_ass_debugger(void)
 	printf("\n");
 }
 
+extern void intExecuteBlock(unsigned int);
+
 static void lightrec_plugin_execute_block(unsigned int target_pc)
 {
 	u32 old_pc = psxRegs.pc;
+	u32 flags;
+	unsigned int target_cycle;
 
-	if (use_lightrec_interpreter) {
-//		intExecuteBlock();
-	} else {
-		u32 flags;
-		unsigned int target_cycle;
+	if (target_pc || !psxRegs.io_cycle_counter)
+		target_cycle = psxRegs.cycle;
+	else
+		target_cycle = psxRegs.io_cycle_counter;
 
+	do {
 		lightrec_restore_registers(lightrec_state, psxRegs.GPR.r);
 		lightrec_reset_cycle_count(lightrec_state, psxRegs.cycle);
 
-		if (target_pc || !psxRegs.io_cycle_counter)
-			target_cycle = psxRegs.cycle;
-		else
-			target_cycle = psxRegs.io_cycle_counter;
+		if (use_lightrec_interpreter) {
+			psxRegs.pc = lightrec_run_interpreter(lightrec_state,
+							      psxRegs.pc);
+		} else {
+			psxRegs.pc = lightrec_execute(lightrec_state,
+						      psxRegs.pc, target_cycle);
+		}
 
-#if 1
-		do {
-			psxRegs.pc = lightrec_execute_one(lightrec_state, psxRegs.pc);
-			psxRegs.cycle = lightrec_current_cycle_count(lightrec_state);
-		} while (psxRegs.cycle < target_cycle);
-#else
-		psxRegs.pc = lightrec_execute(lightrec_state,
-				psxRegs.pc, target_cycle);
-#endif
 		psxRegs.cycle = lightrec_current_cycle_count(lightrec_state);
-
 		lightrec_dump_registers(lightrec_state, psxRegs.GPR.r);
 
 		flags = lightrec_exit_flags(lightrec_state);
 
-		if (flags != LIGHTREC_EXIT_CHECK_INTERRUPT)
-			psxRegs.io_cycle_counter = 0;
+		if (flags & LIGHTREC_EXIT_CHECK_INTERRUPT)
+			psxBranchTest();
+
+		if (flags & LIGHTREC_EXIT_SYSCALL)
+			psxException(0x20, 0);
 
 		if (flags & LIGHTREC_EXIT_SEGFAULT) {
 			fprintf(stderr, "Exiting at cycle 0x%08x\n",
@@ -486,12 +484,9 @@ static void lightrec_plugin_execute_block(unsigned int target_pc)
 			exit(1);
 		}
 
-		if (flags & LIGHTREC_EXIT_SYSCALL)
-			psxException(0x20, 0);
-	}
+	} while (psxRegs.cycle < target_cycle);
 
-	if (psxRegs.cycle >= psxRegs.io_cycle_counter)
-		psxBranchTest();
+	psxBranchTest();
 
 	if (lightrec_debug && psxRegs.cycle >= lightrec_begin_cycles
 			&& psxRegs.pc != old_pc)

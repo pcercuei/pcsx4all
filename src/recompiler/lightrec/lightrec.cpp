@@ -135,6 +135,9 @@ static void cop0_mtc_ctc(struct lightrec_state *state,
 		/* Those registers are read-only */
 		break;
 	case 12: /* Status */
+		if ((psxRegs.CP0.n.Status & ~value) & (1 << 16))
+			lightrec_invalidate_all(state);
+
 		psxRegs.CP0.n.Status = value;
 		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
 		break;

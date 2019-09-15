@@ -198,6 +198,14 @@ static void cop2_op(struct lightrec_state *state, u32 op)
 		cp2_ops[func & 0x3f](op >> 10);
 }
 
+static void reset_target_cycle_count(struct lightrec_state *state)
+{
+	if (!psxRegs.io_cycle_counter)
+		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
+	else
+		lightrec_set_target_cycle_count(state, psxRegs.io_cycle_counter);
+}
+
 static void hw_write_byte(struct lightrec_state *state,
 		const struct opcode *op, u32 mem, u8 val)
 {
@@ -205,8 +213,7 @@ static void hw_write_byte(struct lightrec_state *state,
 
 	psxHwWrite8(mem, val);
 
-	if (!psxRegs.io_cycle_counter)
-		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
+	reset_target_cycle_count(state);
 }
 
 static void hw_write_half(struct lightrec_state *state,
@@ -216,8 +223,7 @@ static void hw_write_half(struct lightrec_state *state,
 
 	psxHwWrite16(mem, val);
 
-	if (!psxRegs.io_cycle_counter)
-		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
+	reset_target_cycle_count(state);
 }
 
 static void hw_write_word(struct lightrec_state *state,
@@ -227,8 +233,7 @@ static void hw_write_word(struct lightrec_state *state,
 
 	psxHwWrite32(mem, val);
 
-	if (!psxRegs.io_cycle_counter)
-		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
+	reset_target_cycle_count(state);
 
 	/* Calling psxHwWrite32 might update psxRegs.cycle - Make sure
 	 * here that state->current_cycle stays in sync. */
@@ -244,8 +249,7 @@ static u8 hw_read_byte(struct lightrec_state *state,
 
 	val = psxHwRead8(mem);
 
-	if (!psxRegs.io_cycle_counter)
-		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
+	reset_target_cycle_count(state);
 
 	return val;
 }
@@ -259,8 +263,7 @@ static u16 hw_read_half(struct lightrec_state *state,
 
 	val = psxHwRead16(mem);
 
-	if (!psxRegs.io_cycle_counter)
-		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
+	reset_target_cycle_count(state);
 
 	return val;
 }
@@ -274,8 +277,7 @@ static u32 hw_read_word(struct lightrec_state *state,
 
 	val = psxHwRead32(mem);
 
-	if (!psxRegs.io_cycle_counter)
-		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
+	reset_target_cycle_count(state);
 
 	return val;
 }

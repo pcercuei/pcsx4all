@@ -55,6 +55,13 @@ unsigned short *SCREEN;
 static bool pcsx4all_initted = false;
 static bool emu_running = false;
 
+char *argv0;
+
+extern bool lightrec_debug;
+extern bool lightrec_very_debug;
+extern bool use_lightrec_interpreter;
+extern u32 lightrec_begin_cycles;
+
 void config_load();
 void config_save();
 
@@ -609,6 +616,8 @@ int main (int argc, char **argv)
 	char filename[256];
 	const char *cdrfilename = GetIsoFile();
 
+	argv0 = argv[0];
+
 	filename[0] = '\0'; /* Executable file name */
 
 	setup_paths();
@@ -1036,6 +1045,23 @@ int main (int argc, char **argv)
 	// ----- END SPU_PCSXREARMED SECTION -----
 
 	#endif //!SPU_NULL
+
+		if (strcmp(argv[i],"-lightrec-debug") == 0) {
+			lightrec_debug = true;
+		}
+
+		if (strcmp(argv[i],"-lightrec-very-debug") == 0) {
+			lightrec_very_debug = true;
+		}
+
+		if (strcmp(argv[i],"-lightrec-interpreter") == 0) {
+			use_lightrec_interpreter = true;
+		}
+
+		if (strcmp(argv[i],"-lightrec-begin-cycles") == 0) {
+			lightrec_begin_cycles = (unsigned int) strtol(
+					argv[++i], NULL, 0);
+		}
 	}
 
 	if (param_parse_error) {

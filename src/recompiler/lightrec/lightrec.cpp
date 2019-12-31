@@ -30,19 +30,19 @@ static struct lightrec_state *lightrec_state;
 
 static char parallel_port[0x10000];
 
-static char *name = "pcsx";
+extern char *argv0;
 
 /* Unused for now */
 u32 event_cycles[PSXINT_COUNT];
 u32 next_interupt;
 u32 cycle_multiplier;
 
-bool use_lightrec_interpreter = false;
-bool lightrec_debug = false;
-u32 lightrec_begin_cycles = 0;
+bool use_lightrec_interpreter;
+bool lightrec_debug;
+u32 lightrec_begin_cycles;
 
-int lightrec_very_debug = 0;
-int stop = 0;
+bool lightrec_very_debug;
+int stop;
 
 enum my_cp2_opcodes {
 	OP_CP2_RTPS		= 0x01,
@@ -100,6 +100,8 @@ static void init_cp2_ops()
 	cp2_ops[OP_CP2_NCCT] = (cp2_fn)gteNCCT;
 }
 
+static char cache_buf[64 * 1024];
+
 static u32 cop0_mfc(struct lightrec_state *state, u8 reg)
 {
 	return psxRegs.CP0.r[reg];
@@ -135,8 +137,12 @@ static void cop0_mtc_ctc(struct lightrec_state *state,
 		/* Those registers are read-only */
 		break;
 	case 12: /* Status */
-		if ((psxRegs.CP0.n.Status & ~value) & (1 << 16))
+		if ((psxRegs.CP0.n.Status & ~value) & (1 << 16)) {
+			memcpy(psxM, cache_buf, sizeof(cache_buf));
 			lightrec_invalidate_all(state);
+		} else if ((~psxRegs.CP0.n.Status & value) & (1 << 16)) {
+			memcpy(cache_buf, psxM, sizeof(cache_buf));
+		}
 
 		psxRegs.CP0.n.Status = value;
 		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
@@ -202,12 +208,11 @@ static void reset_target_cycle_count(struct lightrec_state *state)
 {
 	if (!psxRegs.io_cycle_counter)
 		lightrec_set_exit_flags(state, LIGHTREC_EXIT_CHECK_INTERRUPT);
-	else
+	else if (!lightrec_debug)
 		lightrec_set_target_cycle_count(state, psxRegs.io_cycle_counter);
 }
 
-static void hw_write_byte(struct lightrec_state *state,
-		const struct opcode *op, u32 mem, u8 val)
+static void hw_write_byte(struct lightrec_state *state, u32 mem, u8 val)
 {
 	psxRegs.cycle = lightrec_current_cycle_count(state);
 
@@ -216,8 +221,7 @@ static void hw_write_byte(struct lightrec_state *state,
 	reset_target_cycle_count(state);
 }
 
-static void hw_write_half(struct lightrec_state *state,
-		const struct opcode *op, u32 mem, u16 val)
+static void hw_write_half(struct lightrec_state *state, u32 mem, u16 val)
 {
 	psxRegs.cycle = lightrec_current_cycle_count(state);
 
@@ -226,8 +230,7 @@ static void hw_write_half(struct lightrec_state *state,
 	reset_target_cycle_count(state);
 }
 
-static void hw_write_word(struct lightrec_state *state,
-		const struct opcode *op, u32 mem, u32 val)
+static void hw_write_word(struct lightrec_state *state, u32 mem, u32 val)
 {
 	psxRegs.cycle = lightrec_current_cycle_count(state);
 
@@ -240,8 +243,7 @@ static void hw_write_word(struct lightrec_state *state,
 	lightrec_reset_cycle_count(state, psxRegs.cycle);
 }
 
-static u8 hw_read_byte(struct lightrec_state *state,
-		const struct opcode *op, u32 mem)
+static u8 hw_read_byte(struct lightrec_state *state, u32 mem)
 {
 	u8 val;
 
@@ -254,8 +256,7 @@ static u8 hw_read_byte(struct lightrec_state *state,
 	return val;
 }
 
-static u16 hw_read_half(struct lightrec_state *state,
-		const struct opcode *op, u32 mem)
+static u16 hw_read_half(struct lightrec_state *state, u32 mem)
 {
 	u16 val;
 
@@ -268,8 +269,7 @@ static u16 hw_read_half(struct lightrec_state *state,
 	return val;
 }
 
-static u32 hw_read_word(struct lightrec_state *state,
-		const struct opcode *op, u32 mem)
+static u32 hw_read_word(struct lightrec_state *state, u32 mem)
 {
 	u32 val;
 
@@ -293,14 +293,12 @@ static struct lightrec_mem_map_ops hw_regs_ops = {
 
 static u32 cache_ctrl;
 
-static void cache_ctrl_write_word(struct lightrec_state *state,
-				  const struct opcode *op, u32 mem, u32 val)
+static void cache_ctrl_write_word(struct lightrec_state *state, u32 mem, u32 val)
 {
 	cache_ctrl = val;
 }
 
-static u32 cache_ctrl_read_word(struct lightrec_state *state,
-				const struct opcode *op, u32 mem)
+static u32 cache_ctrl_read_word(struct lightrec_state *state, u32 mem)
 {
 	return cache_ctrl;
 }
@@ -382,6 +380,7 @@ static const struct lightrec_ops lightrec_ops = {
 
 static int lightrec_plugin_init(void)
 {
+#ifndef _WIN32
 	int ret = lightrec_init_mmap();
 	if (ret)
 		return ret;
@@ -392,6 +391,7 @@ static int lightrec_plugin_init(void)
 	psxP_allocated = true;
 	psxH_allocated = true;
 	psxR_allocated = true;
+#endif
 
 	init_cp2_ops();
 
@@ -402,7 +402,7 @@ static int lightrec_plugin_init(void)
 	lightrec_map[PSX_MAP_BIOS].address = psxR;
 	lightrec_map[PSX_MAP_SCRATCH_PAD].address = psxH;
 
-	lightrec_state = lightrec_init(name,
+	lightrec_state = lightrec_init(argv0,
 			lightrec_map, ARRAY_SIZE(lightrec_map),
 			&lightrec_ops);
 
@@ -412,7 +412,9 @@ static int lightrec_plugin_init(void)
 			(uintptr_t) psxR,
 			(uintptr_t) psxH);
 
+#ifndef _WIN32
 	signal(SIGPIPE, exit);
+#endif
 	return 0;
 }
 
@@ -438,7 +440,6 @@ static u32 hash_calculate(const void *buffer, u32 count)
 static void print_for_big_ass_debugger(void)
 {
 	unsigned int i;
-	extern int lightrec_very_debug;
 
 	printf("CYCLE 0x%08x PC 0x%08x", psxRegs.cycle, psxRegs.pc);
 
@@ -468,7 +469,7 @@ static void print_for_big_ass_debugger(void)
 	printf("\n");
 }
 
-extern void intExecuteBlock(unsigned int);
+static u32 old_cycle_counter;
 
 static void lightrec_plugin_execute_block(unsigned int target_pc)
 {
@@ -506,12 +507,14 @@ static void lightrec_plugin_execute_block(unsigned int target_pc)
 		exit(1);
 	}
 
-	if ((flags & LIGHTREC_EXIT_CHECK_INTERRUPT) ||
-	    (psxRegs.cycle >= psxRegs.io_cycle_counter))
-		psxBranchTest();
-
 	if (flags & LIGHTREC_EXIT_SYSCALL)
 		psxException(0x20, 0);
+
+	psxBranchTest();
+
+	if (lightrec_debug && psxRegs.cycle >= lightrec_begin_cycles
+			&& psxRegs.pc != old_pc)
+		print_for_big_ass_debugger();
 
 	if ((psxRegs.CP0.n.Cause & psxRegs.CP0.n.Status & 0x300) &&
 			(psxRegs.CP0.n.Status & 0x1)) {
@@ -520,9 +523,16 @@ static void lightrec_plugin_execute_block(unsigned int target_pc)
 		psxException(psxRegs.CP0.n.Cause, 0);
 	}
 
-	if (lightrec_debug && psxRegs.cycle >= lightrec_begin_cycles
-			&& psxRegs.pc != old_pc)
-		print_for_big_ass_debugger();
+	if ((psxRegs.cycle & ~0xfffffff) != old_cycle_counter) {
+		printf("RAM usage: IR %u KiB, CODE %u KiB, "
+		       "MIPS %u KiB, TOTAL %u KiB, avg. IPI %f\n",
+		       lightrec_get_mem_usage(MEM_FOR_IR) / 1024,
+		       lightrec_get_mem_usage(MEM_FOR_CODE) / 1024,
+		       lightrec_get_mem_usage(MEM_FOR_MIPS_CODE) / 1024,
+		       lightrec_get_total_mem_usage() / 1024,
+		       lightrec_get_average_ipi());
+		old_cycle_counter = psxRegs.cycle & ~0xfffffff;
+	}
 }
 
 static void lightrec_plugin_execute(void)
@@ -542,7 +552,9 @@ static void lightrec_plugin_clear(u32 addr, u32 size)
 static void lightrec_plugin_shutdown(void)
 {
 	lightrec_destroy(lightrec_state);
+#ifndef _WIN32
 	lightrec_free_mmap();
+#endif
 }
 
 static void lightrec_plugin_notify(int note, void *data)
@@ -551,19 +563,6 @@ static void lightrec_plugin_notify(int note, void *data)
 
 static void lightrec_plugin_reset(void)
 {
-	/* At some point, the BIOS disables the writes to the RAM - every
-	 * SB/SH/SW/etc pointing to the RAM won't have any effect.
-	 * Since Lightrec does not emulate that, we just hack the BIOS here to
-	 * jump above that code. */
-	memset(psxR + 0x250, 0, 0x28);
-	memset(psxR + 0x2a0, 0, 0x88);
-	*(u32 *) (psxR + 0x320) = 0x240a1000;
-	*(u32 *) (psxR + 0x324) = 0x240b0f80;
-
-	memset(psxR + 0x1960, 0, 0x28);
-	memset(psxR + 0x19b0, 0, 0x88);
-	*(u32 *) (psxR + 0x1a30) = 0x240a1000;
-	*(u32 *) (psxR + 0x1a34) = 0x240b0f80;
 }
 
 R3000Acpu psxRec =

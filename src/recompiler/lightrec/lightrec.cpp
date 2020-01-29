@@ -555,6 +555,10 @@ static void lightrec_plugin_shutdown(void)
 #ifndef _WIN32
 	lightrec_free_mmap();
 #endif
+	psxM_allocated = false;
+	psxP_allocated = false;
+	psxH_allocated = false;
+	psxR_allocated = false;
 }
 
 static void lightrec_plugin_notify(int note, void *data)

@@ -15,9 +15,7 @@
 #include <SDL.h>
 
 /* PATH_MAX inclusion */
-#ifdef __MINGW32__
 #include <limits.h>
-#endif
 
 #ifdef SPU_PCSXREARMED
 #include "spu/spu_pcsxrearmed/spu_config.h"		// To set spu-specific configuration

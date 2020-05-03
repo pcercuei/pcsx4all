@@ -102,7 +102,7 @@ static void init_cp2_ops()
 
 static char cache_buf[64 * 1024];
 
-static u32 cop0_mfc(struct lightrec_state *state, u8 reg)
+static u32 cop0_mfc(struct lightrec_state *state, u32 op, u8 reg)
 {
 	return psxRegs.CP0.r[reg];
 }
@@ -115,12 +115,12 @@ static u32 cop2_mfc_cfc(struct lightrec_state *state, u8 reg, bool cfc)
 		return gtecalcMFC2(reg);
 }
 
-static u32 cop2_mfc(struct lightrec_state *state, u8 reg)
+static u32 cop2_mfc(struct lightrec_state *state, u32 op, u8 reg)
 {
 	return cop2_mfc_cfc(state, reg, false);
 }
 
-static u32 cop2_cfc(struct lightrec_state *state, u8 reg)
+static u32 cop2_cfc(struct lightrec_state *state, u32 op, u8 reg)
 {
 	return cop2_mfc_cfc(state, reg, true);
 }
@@ -167,22 +167,22 @@ static void cop2_mtc_ctc(struct lightrec_state *state,
 		gtecalcMTC2(value, reg);
 }
 
-static void cop0_mtc(struct lightrec_state *state, u8 reg, u32 value)
+static void cop0_mtc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
 {
 	cop0_mtc_ctc(state, reg, value, false);
 }
 
-static void cop0_ctc(struct lightrec_state *state, u8 reg, u32 value)
+static void cop0_ctc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
 {
 	cop0_mtc_ctc(state, reg, value, true);
 }
 
-static void cop2_mtc(struct lightrec_state *state, u8 reg, u32 value)
+static void cop2_mtc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
 {
 	cop2_mtc_ctc(state, reg, value, false);
 }
 
-static void cop2_ctc(struct lightrec_state *state, u8 reg, u32 value)
+static void cop2_ctc(struct lightrec_state *state, u32 op, u8 reg, u32 value)
 {
 	cop2_mtc_ctc(state, reg, value, true);
 }
@@ -212,7 +212,8 @@ static void reset_target_cycle_count(struct lightrec_state *state)
 		lightrec_set_target_cycle_count(state, psxRegs.io_cycle_counter);
 }
 
-static void hw_write_byte(struct lightrec_state *state, u32 mem, u8 val)
+static void hw_write_byte(struct lightrec_state *state,
+			  u32 op, void *host, u32 mem, u8 val)
 {
 	psxRegs.cycle = lightrec_current_cycle_count(state);
 
@@ -221,7 +222,8 @@ static void hw_write_byte(struct lightrec_state *state, u32 mem, u8 val)
 	reset_target_cycle_count(state);
 }
 
-static void hw_write_half(struct lightrec_state *state, u32 mem, u16 val)
+static void hw_write_half(struct lightrec_state *state,
+			  u32 op, void *host, u32 mem, u16 val)
 {
 	psxRegs.cycle = lightrec_current_cycle_count(state);
 
@@ -230,7 +232,8 @@ static void hw_write_half(struct lightrec_state *state, u32 mem, u16 val)
 	reset_target_cycle_count(state);
 }
 
-static void hw_write_word(struct lightrec_state *state, u32 mem, u32 val)
+static void hw_write_word(struct lightrec_state *state,
+			  u32 op, void *host, u32 mem, u32 val)
 {
 	psxRegs.cycle = lightrec_current_cycle_count(state);
 
@@ -243,7 +246,8 @@ static void hw_write_word(struct lightrec_state *state, u32 mem, u32 val)
 	lightrec_reset_cycle_count(state, psxRegs.cycle);
 }
 
-static u8 hw_read_byte(struct lightrec_state *state, u32 mem)
+static u8 hw_read_byte(struct lightrec_state *state,
+		       u32 op, void *host, u32 mem)
 {
 	u8 val;
 
@@ -256,7 +260,8 @@ static u8 hw_read_byte(struct lightrec_state *state, u32 mem)
 	return val;
 }
 
-static u16 hw_read_half(struct lightrec_state *state, u32 mem)
+static u16 hw_read_half(struct lightrec_state *state,
+			u32 op, void *host, u32 mem)
 {
 	u16 val;
 
@@ -269,7 +274,8 @@ static u16 hw_read_half(struct lightrec_state *state, u32 mem)
 	return val;
 }
 
-static u32 hw_read_word(struct lightrec_state *state, u32 mem)
+static u32 hw_read_word(struct lightrec_state *state,
+			u32 op, void *host, u32 mem)
 {
 	u32 val;
 
@@ -293,12 +299,14 @@ static struct lightrec_mem_map_ops hw_regs_ops = {
 
 static u32 cache_ctrl;
 
-static void cache_ctrl_write_word(struct lightrec_state *state, u32 mem, u32 val)
+static void cache_ctrl_write_word(struct lightrec_state *state,
+				  u32 op, void *host, u32 mem, u32 val)
 {
 	cache_ctrl = val;
 }
 
-static u32 cache_ctrl_read_word(struct lightrec_state *state, u32 mem)
+static u32 cache_ctrl_read_word(struct lightrec_state *state,
+				u32 op, void *host, u32 mem)
 {
 	return cache_ctrl;
 }
